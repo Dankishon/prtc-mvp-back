@@ -1,0 +1,5 @@
+[package]
+name = "PRTC"
+type = "bin"
+authors = ["PRTC team"]
+compiler_version = "0.35.0"
