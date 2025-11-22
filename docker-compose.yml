@@ -1,0 +1,33 @@
+version: "3.9"
+
+services:
+  backend:
+    build:
+      context: ./backend
+    container_name: protectorium-backend
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      - PYTHONUNBUFFERED=1
+    networks:
+      - prot-net
+
+  # Если будет фронтенд — активируйте блок ниже
+  # frontend:
+  #   build:
+  #     context: ./frontend
+  #   container_name: protectorium-frontend
+  #   restart: unless-stopped
+  #   ports:
+  #     - "3000:3000"
+  #   environment:
+  #     - NEXT_PUBLIC_API_URL=http://backend:8000
+  #   depends_on:
+  #     - backend
+  #   networks:
+  #     - prot-net
+
+networks:
+  prot-net:
+    driver: bridge
