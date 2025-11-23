@@ -1,54 +1,136 @@
-from fastapi import APIRouter
-from app.mocks.insurer import (
-    COMPANIES,
-    COMPANY_INCIDENTS,
-    INCIDENT_CARDS
-)
+from fastapi import APIRouter, HTTPException, Depends
+from sqlalchemy.orm import Session
 
-router = APIRouter()
+from app.db import SessionLocal
+from app.models import Incident, Company
 
+
+router = APIRouter(prefix="", tags=["Insurer"])
+
+
+# ------------------------------------------------------
+# dependency
+# ------------------------------------------------------
+
+def get_db():
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
+
+
+# ------------------------------------------------------
+# 1. Company list (portfolio)
+# ------------------------------------------------------
 
 @router.get("/company/incidents/list")
-def list_companies():
-    """
-    Страница портфеля страховщика.
-    Возвращает 10 компаний и количество их инцидентов с ZK Proof.
-    """
-    return COMPANIES
+def list_portfolio(db: Session = Depends(get_db)):
+    companies = db.query(Company).all()
+
+    response = []
+
+    for c in companies:
+        incident_count = db.query(Incident).filter(
+            Incident.company_id == c.id
+        ).count()
+
+        response.append({
+            "company_id": c.id,
+            "company_name": c.name,
+            "incident_count": incident_count
+        })
+
+    return response
 
 
-@router.get("/company/{company_id}/incidents")
-def get_incidents_by_company(company_id: str):
-    """
-    Список инцидентов конкретной компании.
-    """
-    return COMPANY_INCIDENTS.get(
-        company_id,
-        []
-    )
+# ------------------------------------------------------
+# 2. Incidents of company
+# ------------------------------------------------------
+
+@router.get("/company/{companyId}/incidents")
+def incidents_by_company(companyId: str, db: Session = Depends(get_db)):
+
+    company = db.query(Company).filter(Company.id == companyId).first()
+    if not company:
+        raise HTTPException(status_code=404, detail="Company not found")
+
+    incidents = db.query(Incident).filter(
+        Incident.company_id == companyId
+    ).all()
+
+    return [
+        {
+            "incident_id": i.incident_id,
+            "detected_at": i.detected_at,
+            "proof_status": i.proof_status,
+        }
+        for i in incidents
+    ]
 
 
-@router.get("/company/{company_id}/incident/{incident_id}")
-def get_insurer_incident(company_id: str, incident_id: int):
-    """
-    Детальная карточка киберинцидента для страховщика.
-    Показывает commitment off-chain/on-chain, proof, public inputs.
-    """
-    return INCIDENT_CARDS.get(
-        incident_id,
-        {"error": "Incident not found"}
-    )
+# ------------------------------------------------------
+# 3. Incident details
+# ------------------------------------------------------
 
+@router.get("/company/{companyId}/incident/{incidentId}")
+def insurer_incident_details(companyId: str, incidentId: str, db: Session = Depends(get_db)):
 
-@router.post("/company/{company_id}/incident/{incident_id}/verify")
-def verify_incident(company_id: str, incident_id: int):
-    """
-    Нажатие кнопки “Verify Incident”.
-    В MVP — мок, возвращаем успешную транзакцию.
-    """
+    company = db.query(Company).filter(Company.id == companyId).first()
+    if not company:
+        raise HTTPException(status_code=404, detail="Company not found")
+
+    inc = db.query(Incident).filter(
+        Incident.company_id == companyId,
+        Incident.incident_id == incidentId
+    ).first()
+
+    if not inc:
+        raise HTTPException(status_code=404, detail="Incident not found")
+
+    proof_summary = None
+    if inc.proof_status in ["not_verified", "verified"]:
+        proof_summary = {
+            "proof_hash": inc.proof_hash,
+            "public_inputs": inc.public_inputs,
+            "commitment": inc.commitment,
+            "transaction_hash": inc.transaction_hash
+        }
+
     return {
-        "incident_id": incident_id,
-        "verified": True,
-        "txHash": "0xdeadbeefcafecafe11223344ddeeff",
-        "message": "Proof verified successfully"
+        "incident_id": inc.incident_id,
+        "company_id": companyId,
+        "company_name": company.name,
+        "detected_at": inc.detected_at,
+        "commitment": inc.commitment,
+        "proof_status": inc.proof_status,
+        "transaction_hash": inc.transaction_hash,
+        "blockchain_status": inc.blockchain_status,
+        "proof_summary": proof_summary
+    }
+
+
+# ------------------------------------------------------
+# 4. Verify proof
+# ------------------------------------------------------
+
+@router.post("/company/{companyId}/incident/{incidentId}/verify")
+def verify_proof(companyId: str, incidentId: str, db: Session = Depends(get_db)):
+
+    inc = db.query(Incident).filter(
+        Incident.company_id == companyId,
+        Incident.incident_id == incidentId
+    ).first()
+
+    if not inc:
+        raise HTTPException(status_code=404, detail="Incident not found")
+
+    inc.proof_status = "verified"
+    inc.blockchain_status = "confirmed"
+
+    db.commit()
+
+    return {
+        "incident_id": inc.incident_id,
+        "proof_status": inc.proof_status
     }

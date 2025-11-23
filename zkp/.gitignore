@@ -1,7 +1,0 @@
-target/*
-!target/PRTC.json
-!target/VerifierPRTC.sol
-!target/proof
-!target/proofSol
-!target/vk
--b/

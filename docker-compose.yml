@@ -1,5 +1,3 @@
-version: "3.9"
-
 services:
   backend:
     build:
@@ -10,24 +8,30 @@ services:
       - "8000:8000"
     environment:
       - PYTHONUNBUFFERED=1
+      - DATABASE_URL=postgresql+psycopg2://protectorium:protectorium@postgres:5432/protectorium
+    depends_on:
+      - postgres
     networks:
       - prot-net
 
-  # Если будет фронтенд — активируйте блок ниже
-  # frontend:
-  #   build:
-  #     context: ./frontend
-  #   container_name: protectorium-frontend
-  #   restart: unless-stopped
-  #   ports:
-  #     - "3000:3000"
-  #   environment:
-  #     - NEXT_PUBLIC_API_URL=http://backend:8000
-  #   depends_on:
-  #     - backend
-  #   networks:
-  #     - prot-net
+  postgres:
+    image: postgres:16-alpine
+    container_name: protectorium-postgres
+    restart: unless-stopped
+    environment:
+      - POSTGRES_USER=protectorium
+      - POSTGRES_PASSWORD=protectorium
+      - POSTGRES_DB=protectorium
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    networks:
+      - prot-net
 
 networks:
   prot-net:
     driver: bridge
+
+volumes:
+  pgdata:
