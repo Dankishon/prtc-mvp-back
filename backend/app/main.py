@@ -1,26 +1,36 @@
 from datetime import datetime
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 
 from app.db import Base, engine, SessionLocal
 from app.models import Company, Incident
-
-# 🔥 Подключаем роутеры
 from app.routers import incidents, insurer
-
 
 app = FastAPI(
     title="Protectorium MVP Backend",
 )
 
+# ============================================================
+# CORS — важно для фронтенда, особенно при использовании ngrok
+# ============================================================
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],          # на время разработки
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
-# 🔥 Регистрируем роутеры
+# ============================================================
+# Подключаем наши роутеры
+# ============================================================
 app.include_router(incidents.router)
 app.include_router(insurer.router)
 
 
-# ------------------------------------------------------
-# STARTUP: создаём таблицы и заполняем демо-данными
-# ------------------------------------------------------
+# ============================================================
+# Startup — создаём таблицы и наполняем демо-данными
+# ============================================================
 @app.on_event("startup")
 def startup_event():
     """
@@ -31,9 +41,7 @@ def startup_event():
 
     db = SessionLocal()
     try:
-        # -----------------------------
         # 1) Компании
-        # -----------------------------
         if db.query(Company).count() == 0:
             companies = [
                 Company(id="techflow",    name="TechFlow Analytics",     wallet_address=None),
@@ -45,12 +53,11 @@ def startup_event():
             db.add_all(companies)
             db.commit()
 
-        # -----------------------------
         # 2) Инциденты
-        # -----------------------------
         if db.query(Incident).count() == 0:
+
             now = datetime.utcnow()
-            counter = 1
+            counter = 1  # глобально уникальные incident_id
 
             def next_incident_id():
                 nonlocal counter
@@ -164,7 +171,7 @@ def startup_event():
                     public_inputs=["0x01", "0x02"],
                 ),
 
-                # WebSpace – 1 инцидент
+                # WebSpace – 1 need_proof
                 Incident(
                     incident_id=next_incident_id(),
                     company_id="webspace",
@@ -183,3 +190,11 @@ def startup_event():
 
     finally:
         db.close()
+
+
+# ============================================================
+# Healthcheck
+# ============================================================
+@app.get("/")
+def root():
+    return {"status": "ok", "message": "Protectorium API is running"}
