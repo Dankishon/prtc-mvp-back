@@ -1,47 +1,27 @@
-from datetime import datetime
 from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
+from datetime import datetime
 
 from app.db import Base, engine, SessionLocal
 from app.models import Company, Incident
-from app.routers import incidents, insurer
+from app.routers.incidents import router as incidents_router
+from app.routers.insurer import router as insurer_router
 
 app = FastAPI(
     title="Protectorium MVP Backend",
 )
 
-# ============================================================
-# CORS — важно для фронтенда, особенно при использовании ngrok
-# ============================================================
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],          # на время разработки
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
-# ============================================================
-# Подключаем наши роутеры
-# ============================================================
-app.include_router(incidents.router)
-app.include_router(insurer.router)
-
-
-# ============================================================
-# Startup — создаём таблицы и наполняем демо-данными
-# ============================================================
+# ----------------------------------------------------------------------
+# Startup: создаём таблицы и сидируем базу, если пустая
+# ----------------------------------------------------------------------
 @app.on_event("startup")
 def startup_event():
-    """
-    Инициализация схемы БД и заполнение демо-данными.
-    Выполняется только если таблицы пустые.
-    """
     Base.metadata.create_all(bind=engine)
 
     db = SessionLocal()
     try:
-        # 1) Компании
+        # -------------------------------
+        # 1. Компании (если пусто)
+        # -------------------------------
         if db.query(Company).count() == 0:
             companies = [
                 Company(id="techflow",    name="TechFlow Analytics",     wallet_address=None),
@@ -53,11 +33,12 @@ def startup_event():
             db.add_all(companies)
             db.commit()
 
-        # 2) Инциденты
+        # -------------------------------
+        # 2. Инциденты (если пусто)
+        # -------------------------------
         if db.query(Incident).count() == 0:
-
             now = datetime.utcnow()
-            counter = 1  # глобально уникальные incident_id
+            counter = 1
 
             def next_incident_id():
                 nonlocal counter
@@ -66,7 +47,7 @@ def startup_event():
                 return iid
 
             incidents = [
-                # TechFlow – 4 инцидента
+                # TechFlow — 4
                 Incident(
                     incident_id=next_incident_id(),
                     company_id="techflow",
@@ -112,7 +93,7 @@ def startup_event():
                     public_inputs=["0x01", "0x02"],
                 ),
 
-                # CloudSync – 2 инцидента
+                # CloudSync — 2
                 Incident(
                     incident_id=next_incident_id(),
                     company_id="cloudsync",
@@ -136,7 +117,7 @@ def startup_event():
                     public_inputs=["0x01", "0x02"],
                 ),
 
-                # ContentHub – 3 инцидента
+                # ContentHub — 3
                 Incident(
                     incident_id=next_incident_id(),
                     company_id="contenthub",
@@ -171,7 +152,7 @@ def startup_event():
                     public_inputs=["0x01", "0x02"],
                 ),
 
-                # WebSpace – 1 need_proof
+                # WebSpace — 1
                 Incident(
                     incident_id=next_incident_id(),
                     company_id="webspace",
@@ -192,9 +173,8 @@ def startup_event():
         db.close()
 
 
-# ============================================================
-# Healthcheck
-# ============================================================
-@app.get("/")
-def root():
-    return {"status": "ok", "message": "Protectorium API is running"}
+# ----------------------------------------------------------------------
+# Routers
+# ----------------------------------------------------------------------
+app.include_router(incidents_router)
+app.include_router(insurer_router)

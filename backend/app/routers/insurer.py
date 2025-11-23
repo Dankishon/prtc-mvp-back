@@ -4,14 +4,12 @@ from sqlalchemy.orm import Session
 from app.db import SessionLocal
 from app.models import Incident, Company
 
+router = APIRouter(prefix="/company", tags=["Insurer"])
 
-router = APIRouter(prefix="", tags=["Insurer"])
 
-
-# ------------------------------------------------------
-# dependency
-# ------------------------------------------------------
-
+# --------------------------------------------------------------------
+# Dependency: DB session
+# --------------------------------------------------------------------
 def get_db():
     db = SessionLocal()
     try:
@@ -20,117 +18,119 @@ def get_db():
         db.close()
 
 
-# ------------------------------------------------------
-# 1. Company list (portfolio)
-# ------------------------------------------------------
-
-@router.get("/company/incidents/list")
-def list_portfolio(db: Session = Depends(get_db)):
+# --------------------------------------------------------------------
+# 1. LIST COMPANIES WITH INCIDENT COUNTS (GET /company/incidents/list)
+# --------------------------------------------------------------------
+@router.get("/incidents/list")
+def list_company_incidents(db: Session = Depends(get_db)):
     companies = db.query(Company).all()
 
-    response = []
-
+    result = []
     for c in companies:
-        incident_count = db.query(Incident).filter(
-            Incident.company_id == c.id
-        ).count()
+        count = (
+            db.query(Incident)
+            .filter(Incident.company_id == c.id)
+            .filter(Incident.proof_status.in_(["not_verified", "verified"]))
+            .count()
+        )
 
-        response.append({
-            "company_id": c.id,
-            "company_name": c.name,
-            "incident_count": incident_count
-        })
+        result.append(
+            {
+                "company_id": c.id,
+                "company_name": c.name,
+                "wallet_address": c.wallet_address,
+                "verified_incidents_count": count,
+            }
+        )
 
-    return response
+    return result
 
 
-# ------------------------------------------------------
-# 2. Incidents of company
-# ------------------------------------------------------
-
-@router.get("/company/{companyId}/incidents")
-def incidents_by_company(companyId: str, db: Session = Depends(get_db)):
-
+# --------------------------------------------------------------------
+# 2. COMPANY INCIDENT TABLE (GET /company/{companyId}/incidents)
+# --------------------------------------------------------------------
+@router.get("/{companyId}/incidents")
+def company_incidents(companyId: str, db: Session = Depends(get_db)):
     company = db.query(Company).filter(Company.id == companyId).first()
+
     if not company:
         raise HTTPException(status_code=404, detail="Company not found")
 
-    incidents = db.query(Incident).filter(
-        Incident.company_id == companyId
-    ).all()
+    incidents = (
+        db.query(Incident)
+        .filter(Incident.company_id == companyId)
+        .all()
+    )
 
     return [
         {
             "incident_id": i.incident_id,
             "detected_at": i.detected_at,
             "proof_status": i.proof_status,
+            "blockchain_status": i.blockchain_status,
         }
         for i in incidents
     ]
 
 
-# ------------------------------------------------------
-# 3. Incident details
-# ------------------------------------------------------
+# --------------------------------------------------------------------
+# 3. COMPANY INCIDENT DETAILS (GET /company/{companyId}/incident/{incidentId})
+# --------------------------------------------------------------------
+@router.get("/{companyId}/incident/{incidentId}")
+def company_incident_details(companyId: str, incidentId: str, db: Session = Depends(get_db)):
+    incident = (
+        db.query(Incident)
+        .filter(Incident.company_id == companyId)
+        .filter(Incident.incident_id == incidentId)
+        .first()
+    )
 
-@router.get("/company/{companyId}/incident/{incidentId}")
-def insurer_incident_details(companyId: str, incidentId: str, db: Session = Depends(get_db)):
-
-    company = db.query(Company).filter(Company.id == companyId).first()
-    if not company:
-        raise HTTPException(status_code=404, detail="Company not found")
-
-    inc = db.query(Incident).filter(
-        Incident.company_id == companyId,
-        Incident.incident_id == incidentId
-    ).first()
-
-    if not inc:
+    if not incident:
         raise HTTPException(status_code=404, detail="Incident not found")
 
+    company = db.query(Company).filter(Company.id == companyId).first()
+
     proof_summary = None
-    if inc.proof_status in ["not_verified", "verified"]:
+    if incident.proof_status in ["not_verified", "verified"]:
         proof_summary = {
-            "proof_hash": inc.proof_hash,
-            "public_inputs": inc.public_inputs,
-            "commitment": inc.commitment,
-            "transaction_hash": inc.transaction_hash
+            "proof_hash": incident.proof_hash,
+            "public_inputs": incident.public_inputs,
+            "commitment": incident.commitment,
+            "transaction_hash": incident.transaction_hash,
         }
 
     return {
-        "incident_id": inc.incident_id,
-        "company_id": companyId,
+        "incident_id": incident.incident_id,
+        "company_id": incident.company_id,
         "company_name": company.name,
-        "detected_at": inc.detected_at,
-        "commitment": inc.commitment,
-        "proof_status": inc.proof_status,
-        "transaction_hash": inc.transaction_hash,
-        "blockchain_status": inc.blockchain_status,
-        "proof_summary": proof_summary
+        "detected_at": incident.detected_at,
+        "commitment": incident.commitment,
+        "proof_status": incident.proof_status,
+        "transaction_hash": incident.transaction_hash,
+        "blockchain_status": incident.blockchain_status,
+        "proof_summary": proof_summary,
     }
 
 
-# ------------------------------------------------------
-# 4. Verify proof
-# ------------------------------------------------------
+# --------------------------------------------------------------------
+# 4. VERIFY (POST /company/{companyId}/incident/{incidentId}/verify)
+# --------------------------------------------------------------------
+@router.post("/{companyId}/incident/{incidentId}/verify")
+def verify_incident(companyId: str, incidentId: str, db: Session = Depends(get_db)):
+    incident = (
+        db.query(Incident)
+        .filter(Incident.company_id == companyId)
+        .filter(Incident.incident_id == incidentId)
+        .first()
+    )
 
-@router.post("/company/{companyId}/incident/{incidentId}/verify")
-def verify_proof(companyId: str, incidentId: str, db: Session = Depends(get_db)):
-
-    inc = db.query(Incident).filter(
-        Incident.company_id == companyId,
-        Incident.incident_id == incidentId
-    ).first()
-
-    if not inc:
+    if not incident:
         raise HTTPException(status_code=404, detail="Incident not found")
 
-    inc.proof_status = "verified"
-    inc.blockchain_status = "confirmed"
+    incident.proof_status = "verified"
+    incident.blockchain_status = "confirmed"
+    incident.transaction_hash = f"0xtx_verify_{incidentId[-4:]}"
 
     db.commit()
 
-    return {
-        "incident_id": inc.incident_id,
-        "proof_status": inc.proof_status
-    }
+    return {"status": "ZK proof Verified"}

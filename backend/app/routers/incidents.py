@@ -4,14 +4,12 @@ from sqlalchemy.orm import Session
 from app.db import SessionLocal
 from app.models import Incident, Company
 
-
 router = APIRouter(prefix="", tags=["Policyholder"])
 
 
-# ------------------------------------------------------
-# Dependency
-# ------------------------------------------------------
-
+# --------------------------------------------------------------------
+# Dependency: DB session
+# --------------------------------------------------------------------
 def get_db():
     db = SessionLocal()
     try:
@@ -20,10 +18,9 @@ def get_db():
         db.close()
 
 
-# ------------------------------------------------------
+# --------------------------------------------------------------------
 # 1. LIST INCIDENTS (GET /incidents)
-# ------------------------------------------------------
-
+# --------------------------------------------------------------------
 @router.get("/incidents")
 def list_incidents(db: Session = Depends(get_db)):
     incidents = db.query(Incident).all()
@@ -31,6 +28,7 @@ def list_incidents(db: Session = Depends(get_db)):
     return [
         {
             "incident_id": i.incident_id,
+            "company_id": i.company_id,
             "detected_at": i.detected_at,
             "proof_status": i.proof_status,
         }
@@ -38,10 +36,9 @@ def list_incidents(db: Session = Depends(get_db)):
     ]
 
 
-# ------------------------------------------------------
-# 2. INCIDENT DETAILS (GET /incident/{id})
-# ------------------------------------------------------
-
+# --------------------------------------------------------------------
+# 2. INCIDENT DETAILS (GET /incident/{incidentId})
+# --------------------------------------------------------------------
 @router.get("/incident/{incidentId}")
 def incident_details(incidentId: str, db: Session = Depends(get_db)):
     inc = db.query(Incident).filter(Incident.incident_id == incidentId).first()
@@ -51,6 +48,7 @@ def incident_details(incidentId: str, db: Session = Depends(get_db)):
 
     company = db.query(Company).filter(Company.id == inc.company_id).first()
 
+    # Proof summary доступен только если proof_status in ["not_verified", "verified"]
     proof_summary = None
     if inc.proof_status in ["not_verified", "verified"]:
         proof_summary = {
@@ -73,10 +71,9 @@ def incident_details(incidentId: str, db: Session = Depends(get_db)):
     }
 
 
-# ------------------------------------------------------
-# 3. GENERATE PROOF (POST /incident/{id}/generate-proof)
-# ------------------------------------------------------
-
+# --------------------------------------------------------------------
+# 3. GENERATE PROOF (POST /incident/{incidentId}/generate-proof)
+# --------------------------------------------------------------------
 @router.post("/incident/{incidentId}/generate-proof")
 def generate_proof(incidentId: str, db: Session = Depends(get_db)):
     inc = db.query(Incident).filter(Incident.incident_id == incidentId).first()
@@ -84,6 +81,7 @@ def generate_proof(incidentId: str, db: Session = Depends(get_db)):
     if not inc:
         raise HTTPException(status_code=404, detail="Incident not found")
 
+    # обновляем статус (MVP-симуляция)
     inc.proof_status = "not_verified"
     inc.proof_hash = f"0xproof_{incidentId[-4:]}"
     inc.public_inputs = ["0x01", "0x02"]
