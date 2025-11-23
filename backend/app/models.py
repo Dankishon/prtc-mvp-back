@@ -16,48 +16,65 @@ from app.db import Base
 class Company(Base):
     __tablename__ = "companies"
 
-    # Внутренний ID компании (PK)
+    # Internal company ID (PK)
     id = Column(String, primary_key=True, index=True)
-    # Человекочитаемое имя компании
+
+    # Human-readable name
     name = Column(String, nullable=False)
-    # На будущее (можно не использовать в MVP)
+
+    # Optional blockchain wallet
     wallet_address = Column(String, nullable=True)
 
-    # Связь с инцидентами
+    # Relationship to incidents
     incidents = relationship("Incident", back_populates="company")
 
 
 class Incident(Base):
     __tablename__ = "incidents"
 
-    # Внутренний числовой PK
+    # Internal numeric PK
     id = Column(Integer, primary_key=True, index=True)
 
-    # Внешний ID инцидента, который видит фронт (например "20251123-0001")
+    # External incident ID, visible to frontend (e.g., "20251123-0001")
     incident_id = Column(String, unique=True, index=True, nullable=False)
 
-    # Компания, к которой относится инцидент
+    # Company reference
     company_id = Column(String, ForeignKey("companies.id"), nullable=False)
     company = relationship("Company", back_populates="incidents")
 
-    # Время детекции инцидента
+    # Detection timestamp
     detected_at = Column(DateTime, default=datetime.utcnow)
 
-    # Коммитмент (off-chain хэш)
+    # Off-chain cryptographic commitment
     commitment = Column(String, nullable=True)
 
-    # Статус пруфа:
+    # Proof status:
     # need_proof | generating | not_verified | verified
     proof_status = Column(String, nullable=False, default="need_proof")
 
-    # Хэш транзакции в блокчейне (если есть)
+    # On-chain transaction hash
     transaction_hash = Column(String, nullable=True)
 
-    # Статус на блокчейне:
+    # Blockchain status:
     # none | pending | confirmed
     blockchain_status = Column(String, nullable=False, default="none")
 
-    # Элементы proof summary (храним по отдельности)
+    # Proof summary fields
     proof_hash = Column(String, nullable=True)
-    # public_inputs как JSON-массив строк
+
+    # Public inputs (JSON array of hex strings)
     public_inputs = Column(JSON, nullable=True)
+
+    # -------------------------
+    # NEW FIELDS
+    # -------------------------
+
+    # Version of the agent installed on the client's system
+    agent_version = Column(String, nullable=True)
+
+    # Severity of the incident:
+    # low | medium | high | critical
+    severity = Column(String, nullable=True)
+
+    # Number of correlated events / alerts involved
+    event_count = Column(Integer, nullable=True)

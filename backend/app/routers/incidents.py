@@ -21,7 +21,7 @@ def get_db():
 # --------------------------------------------------------------------
 # 1. LIST INCIDENTS (GET /incidents)
 # --------------------------------------------------------------------
-@router.get("/incidents")
+@router.get("/incidents", summary="List all incidents")
 def list_incidents(db: Session = Depends(get_db)):
     incidents = db.query(Incident).all()
 
@@ -31,6 +31,11 @@ def list_incidents(db: Session = Depends(get_db)):
             "company_id": i.company_id,
             "detected_at": i.detected_at,
             "proof_status": i.proof_status,
+
+            # NEW
+            "severity": i.severity,
+            "event_count": i.event_count,
+            "agent_version": i.agent_version,
         }
         for i in incidents
     ]
@@ -39,16 +44,19 @@ def list_incidents(db: Session = Depends(get_db)):
 # --------------------------------------------------------------------
 # 2. INCIDENT DETAILS (GET /incident/{incidentId})
 # --------------------------------------------------------------------
-@router.get("/incident/{incidentId}")
+@router.get("/incident/{incidentId}", summary="Get incident details")
 def incident_details(incidentId: str, db: Session = Depends(get_db)):
-    inc = db.query(Incident).filter(Incident.incident_id == incidentId).first()
+    inc = (
+        db.query(Incident)
+        .filter(Incident.incident_id == incidentId)
+        .first()
+    )
 
     if not inc:
         raise HTTPException(status_code=404, detail="Incident not found")
 
     company = db.query(Company).filter(Company.id == inc.company_id).first()
 
-    # Proof summary доступен только если proof_status in ["not_verified", "verified"]
     proof_summary = None
     if inc.proof_status in ["not_verified", "verified"]:
         proof_summary = {
@@ -67,6 +75,12 @@ def incident_details(incidentId: str, db: Session = Depends(get_db)):
         "proof_status": inc.proof_status,
         "transaction_hash": inc.transaction_hash,
         "blockchain_status": inc.blockchain_status,
+
+        # NEW FIELDS
+        "severity": inc.severity,
+        "event_count": inc.event_count,
+        "agent_version": inc.agent_version,
+
         "proof_summary": proof_summary,
     }
 
@@ -74,14 +88,20 @@ def incident_details(incidentId: str, db: Session = Depends(get_db)):
 # --------------------------------------------------------------------
 # 3. GENERATE PROOF (POST /incident/{incidentId}/generate-proof)
 # --------------------------------------------------------------------
-@router.post("/incident/{incidentId}/generate-proof")
+@router.post(
+    "/incident/{incidentId}/generate-proof",
+    summary="Simulate ZK proof generation",
+)
 def generate_proof(incidentId: str, db: Session = Depends(get_db)):
-    inc = db.query(Incident).filter(Incident.incident_id == incidentId).first()
+    inc = (
+        db.query(Incident)
+        .filter(Incident.incident_id == incidentId)
+        .first()
+    )
 
     if not inc:
         raise HTTPException(status_code=404, detail="Incident not found")
 
-    # обновляем статус (MVP-симуляция)
     inc.proof_status = "not_verified"
     inc.proof_hash = f"0xproof_{incidentId[-4:]}"
     inc.public_inputs = ["0x01", "0x02"]

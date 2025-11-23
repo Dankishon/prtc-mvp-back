@@ -10,18 +10,19 @@ app = FastAPI(
     title="Protectorium MVP Backend",
 )
 
-# ----------------------------------------------------------------------
-# Startup: создаём таблицы и сидируем базу, если пустая
-# ----------------------------------------------------------------------
+
 @app.on_event("startup")
 def startup_event():
+    """
+    Initialize DB schema and seed demo data if tables are empty.
+    """
     Base.metadata.create_all(bind=engine)
 
     db = SessionLocal()
     try:
-        # -------------------------------
-        # 1. Компании (если пусто)
-        # -------------------------------
+        # ------------------------------------------------------------------
+        # 1) Seed companies if empty
+        # ------------------------------------------------------------------
         if db.query(Company).count() == 0:
             companies = [
                 Company(id="techflow",    name="TechFlow Analytics",     wallet_address=None),
@@ -33,9 +34,9 @@ def startup_event():
             db.add_all(companies)
             db.commit()
 
-        # -------------------------------
-        # 2. Инциденты (если пусто)
-        # -------------------------------
+        # ------------------------------------------------------------------
+        # 2) Seed incidents if empty
+        # ------------------------------------------------------------------
         if db.query(Incident).count() == 0:
             now = datetime.utcnow()
             counter = 1
@@ -46,8 +47,17 @@ def startup_event():
                 counter += 1
                 return iid
 
+            def mk(severity, event_count, agent_version):
+                return dict(
+                    severity=severity,
+                    event_count=event_count,
+                    agent_version=agent_version,
+                )
+
             incidents = [
-                # TechFlow — 4
+                # ----------------------------------------------------------
+                # TECHFLOW (4 incidents)
+                # ----------------------------------------------------------
                 Incident(
                     incident_id=next_incident_id(),
                     company_id="techflow",
@@ -58,6 +68,7 @@ def startup_event():
                     blockchain_status="none",
                     proof_hash=None,
                     public_inputs=None,
+                    **mk("low", 12, "1.0.0"),
                 ),
                 Incident(
                     incident_id=next_incident_id(),
@@ -69,6 +80,7 @@ def startup_event():
                     blockchain_status="pending",
                     proof_hash=None,
                     public_inputs=None,
+                    **mk("medium", 47, "1.0.0"),
                 ),
                 Incident(
                     incident_id=next_incident_id(),
@@ -80,6 +92,7 @@ def startup_event():
                     blockchain_status="confirmed",
                     proof_hash="0xproofhash0003",
                     public_inputs=["0x01", "0x02"],
+                    **mk("high", 103, "1.1.0"),
                 ),
                 Incident(
                     incident_id=next_incident_id(),
@@ -91,9 +104,12 @@ def startup_event():
                     blockchain_status="pending",
                     proof_hash="0xproofhash0004",
                     public_inputs=["0x01", "0x02"],
+                    **mk("critical", 256, "1.1.0"),
                 ),
 
-                # CloudSync — 2
+                # ----------------------------------------------------------
+                # CLOUDSYNC (2 incidents)
+                # ----------------------------------------------------------
                 Incident(
                     incident_id=next_incident_id(),
                     company_id="cloudsync",
@@ -104,6 +120,7 @@ def startup_event():
                     blockchain_status="none",
                     proof_hash=None,
                     public_inputs=None,
+                    **mk("medium", 34, "2.0.0"),
                 ),
                 Incident(
                     incident_id=next_incident_id(),
@@ -115,9 +132,12 @@ def startup_event():
                     blockchain_status="confirmed",
                     proof_hash="0xproofhash0011",
                     public_inputs=["0x01", "0x02"],
+                    **mk("high", 89, "2.1.0"),
                 ),
 
-                # ContentHub — 3
+                # ----------------------------------------------------------
+                # CONTENTHUB (3 incidents)
+                # ----------------------------------------------------------
                 Incident(
                     incident_id=next_incident_id(),
                     company_id="contenthub",
@@ -128,6 +148,7 @@ def startup_event():
                     blockchain_status="none",
                     proof_hash=None,
                     public_inputs=None,
+                    **mk("low", 18, "3.0.0"),
                 ),
                 Incident(
                     incident_id=next_incident_id(),
@@ -139,6 +160,7 @@ def startup_event():
                     blockchain_status="pending",
                     proof_hash="0xproofhash0021",
                     public_inputs=["0x01", "0x02"],
+                    **mk("medium", 52, "3.1.0"),
                 ),
                 Incident(
                     incident_id=next_incident_id(),
@@ -150,9 +172,12 @@ def startup_event():
                     blockchain_status="confirmed",
                     proof_hash="0xproofhash0022",
                     public_inputs=["0x01", "0x02"],
+                    **mk("high", 131, "3.2.0"),
                 ),
 
-                # WebSpace — 1
+                # ----------------------------------------------------------
+                # WEBSPACE (1 incident)
+                # ----------------------------------------------------------
                 Incident(
                     incident_id=next_incident_id(),
                     company_id="webspace",
@@ -163,6 +188,7 @@ def startup_event():
                     blockchain_status="none",
                     proof_hash=None,
                     public_inputs=None,
+                    **mk("medium", 41, "1.0.5"),
                 ),
             ]
 

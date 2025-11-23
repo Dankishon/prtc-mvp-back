@@ -29,6 +29,21 @@ services:
     networks:
       - prot-net
 
+  dashboard:
+    build:
+      context: ./dashboard-hackaton
+    container_name: protectorium-dashboard
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      - API_URL=http://backend:8000
+    depends_on:
+      - backend
+    networks:
+      - prot-net
+
 networks:
   prot-net:
     driver: bridge
